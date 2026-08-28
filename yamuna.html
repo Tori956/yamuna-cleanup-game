@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yamuna River Cleanup Simulator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #e0f2fe;
+            color: #1e293b;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            width: 800px;
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 { color: #0369a1; text-align: center; margin-top: 0; }
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            background-color: #f0f9ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #bae6fd;
+        }
+        .stat-box { text-align: center; }
+        .stat-value { font-size: 1.5em; font-weight: bold; color: #0284c7; }
+        .game-area {
+            display: flex;
+            gap: 20px;
+        }
+        .river-section {
+            flex: 1;
+            border: 2px dashed #38bdf8;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            background-color: #f8fafc;
+        }
+        .worker-section {
+            flex: 1;
+        }
+        .trash-display {
+            font-size: 4em;
+            margin: 20px 0;
+            min-height: 80px;
+        }
+        button {
+            background-color: #0284c7;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            width: 100%;
+            margin-bottom: 10px;
+            transition: background-color 0.2s;
+        }
+        button:hover { background-color: #0369a1; }
+        button:disabled { background-color: #94a3b8; cursor: not-allowed; }
+        .worker-card {
+            border: 1px solid #cbd5e1;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            background-color: #fff;
+        }
+        .worker-card h4 { margin: 0 0 5px 0; }
+        .log {
+            margin-top: 20px;
+            height: 100px;
+            overflow-y: auto;
+            border: 1px solid #e2e8f0;
+            padding: 10px;
+            background: #fafafa;
+            font-size: 0.9em;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Yamuna River Cleanup</h1>
+    
+    <div class="stats">
+        <div class="stat-box">
+            <div>Target Rubbish Left</div>
+            <div id="target-count" class="stat-value">100,000</div>
+        </div>
+        <div class="stat-box">
+            <div>Funds</div>
+            <div id="money" class="stat-value">$0.00</div>
+        </div>
+        <div class="stat-box">
+            <div>Total Cleaned</div>
+            <div id="cleaned-count" class="stat-value">0</div>
+        </div>
+    </div>
+
+    <div class="game-area">
+        <div class="river-section">
+            <h3>Yamuna River</h3>
+            <div id="trash-icon" class="trash-display">🥤</div>
+            <div id="trash-name" style="font-weight: bold; margin-bottom: 15px;">Soda Can</div>
+            <button id="manual-pick-btn">Pick Trash Manually</button>
+        </div>
+
+        <div class="worker-section">
+            <h3>Hire Trash Pickers</h3>
+            <div id="worker-list"></div>
+        </div>
+    </div>
+
+    <h3>Activity Log</h3>
+    <div id="log" class="log"></div>
+</div>
+
+<script>
+    let rubbishRemaining = 100000;
+    let totalCleaned = 0;
+    let money = 10.00; // Starting money to help hire first worker
+
+    const trashTypes = [
+        { name: "Soda Can", icon: "🥤", minVal: 0.5, maxVal: 1.5 },
+        { name: "Plastic Bag", icon: "🛍️", minVal: 0.2, maxVal: 0.8 },
+        { name: "Chip Bag", icon: "🍿", minVal: 0.3, maxVal: 1.0 },
+        { name: "Broken Stationary", icon: "✏️", minVal: 0.1, maxVal: 0.5 },
+        { name: "Plastic Bottle", icon: "🍾", minVal: 0.4, maxVal: 1.2 },
+        { name: "Old Tire", icon: "🛞", minVal: 2.0, maxVal: 5.0 }
+    ];
+
+    const workerTypes = [
+        { id: 1, name: "Volunteer", cost: 5, speed: 3000, count: 0, itemsPicked: 0 },
+        { id: 2, name: "Local Worker", cost: 20, speed: 2000, count: 0, itemsPicked: 0 },
+        { id: 3, name: "Sanitation Squad", cost: 100, speed: 1000, count: 0, itemsPicked: 0 },
+        { id: 4, name: "Eco-Dredger Boat", cost: 500, speed: 400, count: 0, itemsPicked: 0 }
+    ];
+
+    let currentTrash = trashTypes[0];
+
+    function updateDisplay() {
+        document.getElementById("target-count").innerText = Math.max(0, rubbishRemaining).toLocaleString();
+        document.getElementById("cleaned-count").innerText = totalCleaned.toLocaleString();
+        document.getElementById("money").innerText = "$" + money.toFixed(2);
+        
+        if (rubbishRemaining <= 0) {
+            log("CONGRATULATIONS! You have cleaned 100,000 pieces of rubbish from the Yamuna River!");
+            document.getElementById("manual-pick-btn").disabled = true;
+        }
+
+        renderWorkers();
+    }
+
+    function getRandomTrash() {
+        const randomIndex = Math.floor(Math.random() * trashTypes.length);
+        return trashTypes[randomIndex];
+    }
+
+    function log(message) {
+        const logBox = document.getElementById("log");
+        logBox.innerHTML = `<div>> ${message}</div>` + logBox.innerHTML;
+    }
+
+    function collectTrash(sourceName) {
+        if (rubbishRemaining <= 0) return;
+
+        const earned = Math.random() * (currentTrash.maxVal - currentTrash.minVal) + currentTrash.minVal;
+        money += earned;
+        rubbishRemaining--;
+        totalCleaned++;
+
+        currentTrash = getRandomTrash();
+        document.getElementById("trash-icon").innerText = currentTrash.icon;
+        document.getElementById("trash-name").innerText = currentTrash.name;
+
+        updateDisplay();
+    }
+
+    function processWorkerPayout(worker) {
+        worker.itemsPicked++;
+        if (worker.itemsPicked >= 30) {
+            worker.itemsPicked = 0;
+            if (money >= 0.50) {
+                money -= 0.50;
+                log(`Paid $0.50 wages for a ${worker.name}.`);
+            } else {
+                log(`Warning: Couldn't pay $0.50 wage for ${worker.name}! (Balance negative/zero)`);
+                money -= 0.50;
+            }
+        }
+    }
+
+    function hireWorker(index) {
+        const worker = workerTypes[index];
+        if (money >= worker.cost) {
+            money -= worker.cost;
+            worker.count++;
+            worker.cost = Math.floor(worker.cost * 1.5); // Increase cost for next purchase
+            
+            log(`Hired a ${worker.name}!`);
+            
+            // Start worker loop
+            setInterval(() => {
+                if (rubbishRemaining > 0) {
+                    collectTrash(worker.name);
+                    processWorkerPayout(worker);
+                }
+            }, worker.speed);
+
+            updateDisplay();
+        }
+    }
+
+    function renderWorkers() {
+        const list = document.getElementById("worker-list");
+        list.innerHTML = "";
+        workerTypes.forEach((worker, index) => {
+            const card = document.createElement("div");
+            card.className = "worker-card";
+            card.innerHTML = `
+                <h4>${worker.name} (Owned: ${worker.count})</h4>
+                <div>Speed: 1 trash / ${worker.speed / 1000}s</div>
+                <div>Cost: $${worker.cost.toFixed(2)}</div>
+                <button onclick="hireWorker(${index})" ${money < worker.cost ? 'disabled' : ''}>
+                    Hire ${worker.name}
+                </button>
+            `;
+            list.appendChild(card);
+        });
+    }
+
+    document.getElementById("manual-pick-btn").addEventListener("click", () => {
+        collectTrash("Player");
+    });
+
+    // Initialize
+    updateDisplay();
+</script>
+
+</body>
+</html>

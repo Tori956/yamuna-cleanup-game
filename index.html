@@ -15,7 +15,7 @@
             justify-content: center;
         }
         .container {
-            width: 800px;
+            width: 1000px;
             background-color: #ffffff;
             padding: 20px;
             border-radius: 10px;
@@ -48,6 +48,13 @@
         .worker-section {
             flex: 1;
         }
+        .accounting-section {
+            flex: 1.2;
+            background-color: #f8fafc;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 15px;
+        }
         .trash-display {
             font-size: 4em;
             margin: 20px 0;
@@ -75,16 +82,30 @@
             background-color: #fff;
         }
         .worker-card h4 { margin: 0 0 5px 0; }
+        .ledger-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+            font-size: 0.9em;
+        }
+        .ledger-table th, .ledger-table td {
+            padding: 6px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .ledger-table th { background-color: #e0f2fe; }
         .log {
-            margin-top: 20px;
-            height: 100px;
+            height: 120px;
             overflow-y: auto;
             border: 1px solid #e2e8f0;
-            padding: 10px;
-            background: #fafafa;
-            font-size: 0.9em;
+            padding: 8px;
+            background: #fff;
+            font-size: 0.85em;
             border-radius: 5px;
+            font-family: monospace;
         }
+        .text-green { color: #16a34a; font-weight: bold; }
+        .text-red { color: #dc2626; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -98,8 +119,8 @@
             <div id="target-count" class="stat-value">100,000</div>
         </div>
         <div class="stat-box">
-            <div>Funds</div>
-            <div id="money" class="stat-value">$0.00</div>
+            <div>Available Funds</div>
+            <div id="money" class="stat-value">$10.00</div>
         </div>
         <div class="stat-box">
             <div>Total Cleaned</div>
@@ -119,16 +140,52 @@
             <h3>Hire Trash Pickers</h3>
             <div id="worker-list"></div>
         </div>
-    </div>
 
-    <h3>Activity Log</h3>
-    <div id="log" class="log"></div>
+        <div class="accounting-section">
+            <h3>Accounting Ledger</h3>
+            <table class="ledger-table">
+                <tr>
+                    <td><strong>Total Revenue:</strong></td>
+                    <td id="acc-revenue" class="text-green">$0.00</td>
+                </tr>
+                <tr>
+                    <td><strong>Capital Invested:</strong></td>
+                    <td id="acc-capital">$10.00</td>
+                </tr>
+                <tr>
+                    <td><strong>Equipment & Hiring Expenses:</strong></td>
+                    <td id="acc-hiring" class="text-red">$0.00</td>
+                </tr>
+                <tr>
+                    <td><strong>Labor Expenses (Wages):</strong></td>
+                    <td id="acc-wages" class="text-red">$0.00</td>
+                </tr>
+                <tr style="border-top: 2px solid #0284c7;">
+                    <td><strong>Net Profit / Loss:</strong></td>
+                    <td id="acc-profit">$0.00</td>
+                </tr>
+                <tr>
+                    <td><strong>Profit Margin:</strong></td>
+                    <td id="acc-margin">0%</td>
+                </tr>
+            </table>
+
+            <h4>Transaction Log</h4>
+            <div id="ledger-log" class="log"></div>
+        </div>
+    </div>
 </div>
 
 <script>
     let rubbishRemaining = 100000;
     let totalCleaned = 0;
-    let money = 10.00; // Starting money to help hire first worker
+    let money = 10.00; // Starting capital
+
+    // Accounting State
+    let totalRevenue = 0;
+    let totalHiringExpenses = 0;
+    let totalWageExpenses = 0;
+    const initialCapital = 10.00;
 
     const trashTypes = [
         { name: "Soda Can", icon: "🥤", minVal: 0.5, maxVal: 1.5 },
@@ -148,13 +205,32 @@
 
     let currentTrash = trashTypes[0];
 
+    function logTransaction(type, description, amount) {
+        const logBox = document.getElementById("ledger-log");
+        const colorClass = type === 'REV' ? 'text-green' : 'text-red';
+        const prefix = type === 'REV' ? '+' : '-';
+        const entry = `<div>[${type}] ${description}: <span class="${colorClass}">${prefix}$${amount.toFixed(2)}</span></div>`;
+        logBox.innerHTML = entry + logBox.innerHTML;
+    }
+
     function updateDisplay() {
         document.getElementById("target-count").innerText = Math.max(0, rubbishRemaining).toLocaleString();
         document.getElementById("cleaned-count").innerText = totalCleaned.toLocaleString();
         document.getElementById("money").innerText = "$" + money.toFixed(2);
         
+        // Accounting updates
+        const netProfit = totalRevenue - (totalHiringExpenses + totalWageExpenses);
+        const margin = totalRevenue > 0 ? ((netProfit / totalRevenue) * 100).toFixed(1) : 0;
+
+        document.getElementById("acc-revenue").innerText = "$" + totalRevenue.toFixed(2);
+        document.getElementById("acc-hiring").innerText = "$" + totalHiringExpenses.toFixed(2);
+        document.getElementById("acc-wages").innerText = "$" + totalWageExpenses.toFixed(2);
+        document.getElementById("acc-profit").innerText = "$" + netProfit.toFixed(2);
+        document.getElementById("acc-profit").className = netProfit >= 0 ? "text-green" : "text-red";
+        document.getElementById("acc-margin").innerText = margin + "%";
+
         if (rubbishRemaining <= 0) {
-            log("CONGRATULATIONS! You have cleaned 100,000 pieces of rubbish from the Yamuna River!");
+            logTransaction("INFO", "GOAL REACHED! 100,000 trash items cleaned.", 0);
             document.getElementById("manual-pick-btn").disabled = true;
         }
 
@@ -166,16 +242,12 @@
         return trashTypes[randomIndex];
     }
 
-    function log(message) {
-        const logBox = document.getElementById("log");
-        logBox.innerHTML = `<div>> ${message}</div>` + logBox.innerHTML;
-    }
-
     function collectTrash(sourceName) {
         if (rubbishRemaining <= 0) return;
 
         const earned = Math.random() * (currentTrash.maxVal - currentTrash.minVal) + currentTrash.minVal;
         money += earned;
+        totalRevenue += earned;
         rubbishRemaining--;
         totalCleaned++;
 
@@ -190,26 +262,25 @@
         worker.itemsPicked++;
         if (worker.itemsPicked >= 30) {
             worker.itemsPicked = 0;
-            if (money >= 0.50) {
-                money -= 0.50;
-                log(`Paid $0.50 wages for a ${worker.name}.`);
-            } else {
-                log(`Warning: Couldn't pay $0.50 wage for ${worker.name}! (Balance negative/zero)`);
-                money -= 0.50;
-            }
+            const wage = 0.50;
+            money -= wage;
+            totalWageExpenses += wage;
+            logTransaction("EXP", `Wage paid (${worker.name})`, wage);
         }
     }
 
     function hireWorker(index) {
         const worker = workerTypes[index];
         if (money >= worker.cost) {
-            money -= worker.cost;
+            const cost = worker.cost;
+            money -= cost;
+            totalHiringExpenses += cost;
             worker.count++;
-            worker.cost = Math.floor(worker.cost * 1.5); // Increase cost for next purchase
             
-            log(`Hired a ${worker.name}!`);
+            logTransaction("EXP", `Hired ${worker.name}`, cost);
+
+            worker.cost = Math.floor(worker.cost * 1.5);
             
-            // Start worker loop
             setInterval(() => {
                 if (rubbishRemaining > 0) {
                     collectTrash(worker.name);
@@ -243,7 +314,7 @@
         collectTrash("Player");
     });
 
-    // Initialize
+    // Initialize display
     updateDisplay();
 </script>
 

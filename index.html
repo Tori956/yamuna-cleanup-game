@@ -15,13 +15,36 @@
             justify-content: center;
         }
         .container {
-            width: 1000px;
+            width: 850px;
             background-color: #ffffff;
             padding: 20px;
             border-radius: 10px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
         h1 { color: #0369a1; text-align: center; margin-top: 0; }
+        .account-bar {
+            background-color: #0284c7;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .account-bar input {
+            padding: 6px;
+            border-radius: 4px;
+            border: none;
+            margin-right: 5px;
+        }
+        .account-bar button {
+            background-color: #0369a1;
+            width: auto;
+            margin-bottom: 0;
+            padding: 6px 12px;
+        }
+        .account-bar button:hover { background-color: #0c4a6e; }
         .stats {
             display: flex;
             justify-content: space-around;
@@ -47,13 +70,6 @@
         }
         .worker-section {
             flex: 1;
-        }
-        .accounting-section {
-            flex: 1.2;
-            background-color: #f8fafc;
-            border: 1px solid #cbd5e1;
-            border-radius: 8px;
-            padding: 15px;
         }
         .trash-display {
             font-size: 4em;
@@ -82,30 +98,16 @@
             background-color: #fff;
         }
         .worker-card h4 { margin: 0 0 5px 0; }
-        .ledger-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 15px;
-            font-size: 0.9em;
-        }
-        .ledger-table th, .ledger-table td {
-            padding: 6px;
-            text-align: left;
-            border-bottom: 1px solid #e2e8f0;
-        }
-        .ledger-table th { background-color: #e0f2fe; }
         .log {
-            height: 120px;
+            margin-top: 20px;
+            height: 100px;
             overflow-y: auto;
             border: 1px solid #e2e8f0;
-            padding: 8px;
-            background: #fff;
-            font-size: 0.85em;
+            padding: 10px;
+            background: #fafafa;
+            font-size: 0.9em;
             border-radius: 5px;
-            font-family: monospace;
         }
-        .text-green { color: #16a34a; font-weight: bold; }
-        .text-red { color: #dc2626; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -113,13 +115,21 @@
 <div class="container">
     <h1>Yamuna River Cleanup</h1>
     
+    <div class="account-bar">
+        <div id="account-status">Not logged in (Playing as Guest)</div>
+        <div id="account-controls">
+            <input type="text" id="username-input" placeholder="Enter username...">
+            <button onclick="loginUser()">Login / Create Account</button>
+        </div>
+    </div>
+
     <div class="stats">
         <div class="stat-box">
             <div>Target Rubbish Left</div>
             <div id="target-count" class="stat-value">100,000</div>
         </div>
         <div class="stat-box">
-            <div>Available Funds</div>
+            <div>Funds</div>
             <div id="money" class="stat-value">$10.00</div>
         </div>
         <div class="stat-box">
@@ -140,52 +150,18 @@
             <h3>Hire Trash Pickers</h3>
             <div id="worker-list"></div>
         </div>
-
-        <div class="accounting-section">
-            <h3>Accounting Ledger</h3>
-            <table class="ledger-table">
-                <tr>
-                    <td><strong>Total Revenue:</strong></td>
-                    <td id="acc-revenue" class="text-green">$0.00</td>
-                </tr>
-                <tr>
-                    <td><strong>Capital Invested:</strong></td>
-                    <td id="acc-capital">$10.00</td>
-                </tr>
-                <tr>
-                    <td><strong>Equipment & Hiring Expenses:</strong></td>
-                    <td id="acc-hiring" class="text-red">$0.00</td>
-                </tr>
-                <tr>
-                    <td><strong>Labor Expenses (Wages):</strong></td>
-                    <td id="acc-wages" class="text-red">$0.00</td>
-                </tr>
-                <tr style="border-top: 2px solid #0284c7;">
-                    <td><strong>Net Profit / Loss:</strong></td>
-                    <td id="acc-profit">$0.00</td>
-                </tr>
-                <tr>
-                    <td><strong>Profit Margin:</strong></td>
-                    <td id="acc-margin">0%</td>
-                </tr>
-            </table>
-
-            <h4>Transaction Log</h4>
-            <div id="ledger-log" class="log"></div>
-        </div>
     </div>
+
+    <h3>Activity Log</h3>
+    <div id="log" class="log"></div>
 </div>
 
 <script>
+    let currentUser = null;
     let rubbishRemaining = 100000;
     let totalCleaned = 0;
-    let money = 10.00; // Starting capital
-
-    // Accounting State
-    let totalRevenue = 0;
-    let totalHiringExpenses = 0;
-    let totalWageExpenses = 0;
-    const initialCapital = 10.00;
+    let money = 10.00;
+    let activeIntervals = [];
 
     const trashTypes = [
         { name: "Soda Can", icon: "🥤", minVal: 0.5, maxVal: 1.5 },
@@ -196,7 +172,7 @@
         { name: "Old Tire", icon: "🛞", minVal: 2.0, maxVal: 5.0 }
     ];
 
-    const workerTypes = [
+    let workerTypes = [
         { id: 1, name: "Volunteer", cost: 5, speed: 3000, count: 0, itemsPicked: 0 },
         { id: 2, name: "Local Worker", cost: 20, speed: 2000, count: 0, itemsPicked: 0 },
         { id: 3, name: "Sanitation Squad", cost: 100, speed: 1000, count: 0, itemsPicked: 0 },
@@ -205,12 +181,114 @@
 
     let currentTrash = trashTypes[0];
 
-    function logTransaction(type, description, amount) {
-        const logBox = document.getElementById("ledger-log");
-        const colorClass = type === 'REV' ? 'text-green' : 'text-red';
-        const prefix = type === 'REV' ? '+' : '-';
-        const entry = `<div>[${type}] ${description}: <span class="${colorClass}">${prefix}$${amount.toFixed(2)}</span></div>`;
-        logBox.innerHTML = entry + logBox.innerHTML;
+    function log(message) {
+        const logBox = document.getElementById("log");
+        logBox.innerHTML = `<div>> ${message}</div>` + logBox.innerHTML;
+    }
+
+    function saveGame() {
+        if (!currentUser) return;
+        
+        const saveData = {
+            rubbishRemaining,
+            totalCleaned,
+            money,
+            workerCounts: workerTypes.map(w => w.count),
+            workerCosts: workerTypes.map(w => w.cost)
+        };
+
+        localStorage.setItem("yamuna_user_" + currentUser, JSON.stringify(saveData));
+    }
+
+    function loadGame(username) {
+        const savedData = localStorage.getItem("yamuna_user_" + username);
+        
+        // Clear active worker timers
+        activeIntervals.forEach(clearInterval);
+        activeIntervals = [];
+
+        if (savedData) {
+            const data = JSON.parse(savedData);
+            rubbishRemaining = data.rubbishRemaining;
+            totalCleaned = data.totalCleaned;
+            money = data.money;
+
+            workerTypes.forEach((worker, index) => {
+                worker.count = data.workerCounts[index] || 0;
+                worker.cost = data.workerCosts[index] || worker.cost;
+                worker.itemsPicked = 0;
+
+                // Restart worker loops based on saved counts
+                for (let i = 0; i < worker.count; i++) {
+                    const timer = setInterval(() => {
+                        if (rubbishRemaining > 0) {
+                            collectTrash(worker.name);
+                            processWorkerPayout(worker);
+                        }
+                    }, worker.speed);
+                    activeIntervals.push(timer);
+                }
+            });
+
+            log(`Welcome back, ${username}! Progress loaded.`);
+        } else {
+            // Reset to defaults for new user
+            rubbishRemaining = 100000;
+            totalCleaned = 0;
+            money = 10.00;
+            workerTypes = [
+                { id: 1, name: "Volunteer", cost: 5, speed: 3000, count: 0, itemsPicked: 0 },
+                { id: 2, name: "Local Worker", cost: 20, speed: 2000, count: 0, itemsPicked: 0 },
+                { id: 3, name: "Sanitation Squad", cost: 100, speed: 1000, count: 0, itemsPicked: 0 },
+                { id: 4, name: "Eco-Dredger Boat", cost: 500, speed: 400, count: 0, itemsPicked: 0 }
+            ];
+            log(`Created new account for ${username}.`);
+        }
+
+        updateDisplay();
+    }
+
+    function loginUser() {
+        const usernameInput = document.getElementById("username-input").value.trim().toLowerCase();
+        if (!usernameInput) {
+            alert("Please enter a username.");
+            return;
+        }
+
+        currentUser = usernameInput;
+        document.getElementById("account-status").innerHTML = `Logged in as: <strong>${currentUser}</strong>`;
+        document.getElementById("account-controls").innerHTML = `<button onclick="logoutUser()">Save & Logout</button>`;
+
+        loadGame(currentUser);
+    }
+
+    function logoutUser() {
+        saveGame();
+        log(`Saved progress for ${currentUser}.`);
+        
+        currentUser = null;
+        activeIntervals.forEach(clearInterval);
+        activeIntervals = [];
+
+        document.getElementById("account-status").innerText = "Not logged in (Playing as Guest)";
+        document.getElementById("account-controls").innerHTML = `
+            <input type="text" id="username-input" placeholder="Enter username...">
+            <button onclick="loginUser()">Login / Create Account</button>
+        `;
+
+        // Reset game board
+        rubbishRemaining = 100000;
+        totalCleaned = 0;
+        money = 10.00;
+        workerTypes.forEach(w => { w.count = 0; w.cost = getInitialCost(w.id); });
+        updateDisplay();
+    }
+
+    function getInitialCost(id) {
+        if (id === 1) return 5;
+        if (id === 2) return 20;
+        if (id === 3) return 100;
+        if (id === 4) return 500;
     }
 
     function updateDisplay() {
@@ -218,19 +296,8 @@
         document.getElementById("cleaned-count").innerText = totalCleaned.toLocaleString();
         document.getElementById("money").innerText = "$" + money.toFixed(2);
         
-        // Accounting updates
-        const netProfit = totalRevenue - (totalHiringExpenses + totalWageExpenses);
-        const margin = totalRevenue > 0 ? ((netProfit / totalRevenue) * 100).toFixed(1) : 0;
-
-        document.getElementById("acc-revenue").innerText = "$" + totalRevenue.toFixed(2);
-        document.getElementById("acc-hiring").innerText = "$" + totalHiringExpenses.toFixed(2);
-        document.getElementById("acc-wages").innerText = "$" + totalWageExpenses.toFixed(2);
-        document.getElementById("acc-profit").innerText = "$" + netProfit.toFixed(2);
-        document.getElementById("acc-profit").className = netProfit >= 0 ? "text-green" : "text-red";
-        document.getElementById("acc-margin").innerText = margin + "%";
-
         if (rubbishRemaining <= 0) {
-            logTransaction("INFO", "GOAL REACHED! 100,000 trash items cleaned.", 0);
+            log("CONGRATULATIONS! You have cleaned 100,000 pieces of rubbish from the Yamuna River!");
             document.getElementById("manual-pick-btn").disabled = true;
         }
 
@@ -247,7 +314,6 @@
 
         const earned = Math.random() * (currentTrash.maxVal - currentTrash.minVal) + currentTrash.minVal;
         money += earned;
-        totalRevenue += earned;
         rubbishRemaining--;
         totalCleaned++;
 
@@ -256,39 +322,38 @@
         document.getElementById("trash-name").innerText = currentTrash.name;
 
         updateDisplay();
+        saveGame();
     }
 
     function processWorkerPayout(worker) {
         worker.itemsPicked++;
         if (worker.itemsPicked >= 30) {
             worker.itemsPicked = 0;
-            const wage = 0.50;
-            money -= wage;
-            totalWageExpenses += wage;
-            logTransaction("EXP", `Wage paid (${worker.name})`, wage);
+            money -= 0.50;
+            log(`Paid $0.50 wages for a ${worker.name}.`);
         }
     }
 
     function hireWorker(index) {
         const worker = workerTypes[index];
         if (money >= worker.cost) {
-            const cost = worker.cost;
-            money -= cost;
-            totalHiringExpenses += cost;
+            money -= worker.cost;
             worker.count++;
-            
-            logTransaction("EXP", `Hired ${worker.name}`, cost);
-
             worker.cost = Math.floor(worker.cost * 1.5);
             
-            setInterval(() => {
+            log(`Hired a ${worker.name}!`);
+            
+            const timer = setInterval(() => {
                 if (rubbishRemaining > 0) {
                     collectTrash(worker.name);
                     processWorkerPayout(worker);
                 }
             }, worker.speed);
 
+            activeIntervals.push(timer);
+
             updateDisplay();
+            saveGame();
         }
     }
 
@@ -314,7 +379,7 @@
         collectTrash("Player");
     });
 
-    // Initialize display
+    // Initialize
     updateDisplay();
 </script>
 
